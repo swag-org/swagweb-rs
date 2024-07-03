@@ -1,3 +1,3 @@
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+python -m venv .env
+.\.env\Scripts\Activate.ps1
 pip install maturin

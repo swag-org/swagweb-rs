@@ -1,4 +1,3 @@
-python -m venv .venv
 python -m venv .env
-source .venv/bin/activate
+source .env/bin/activate
 pip install maturin
