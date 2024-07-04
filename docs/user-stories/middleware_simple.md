@@ -1,3 +1,4 @@
+Response middleware for some specific cases.
 ```
 from swagweb_rs import App, Router, DefaultConfig
 from swagweb_rs.routing import Root
@@ -14,7 +15,7 @@ router = app.route_factory.new(path=[Root])
 
 @router.get([]) # will listening at localhost:8000
 def get(request: Request) -> Response:
-    return PlainTextResponse("Hello, world!")
+    return PlainTextResponse("Hello, world").middleware(lambda ctx: f"{ctx.response.text}!")
 
 app.run()
 ```
