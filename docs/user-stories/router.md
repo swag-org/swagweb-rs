@@ -21,7 +21,7 @@ app.run()
 
 Best practice: create root router and then compose others to it. Routers will be relative, but composed versions will be absolute.
 
-```
+```python
 from swagweb_rs import App, Router, DefaultConfig
 from swagweb_rs.routing import Router, Root
 from swagweb_rs.http import Request, Response, PlaintTextResponse
