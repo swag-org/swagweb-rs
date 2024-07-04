@@ -1,7 +1,7 @@
 ```python
-from swagweb_rs import App, Router, DefaultConfig
-from swagweb_rs.routing import Root
-from swagweb_rs.http import Request, Response, PlaintTextResponse
+from swagweb_rs import App, DefaultConfig
+from swagweb_rs.routing import Root, Router
+from swagweb_rs.http import Request, Response, PlainTextResponse
 
 app = App().config(
     DefaultConfig(

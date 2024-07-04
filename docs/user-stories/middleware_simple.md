@@ -1,8 +1,7 @@
-Response middleware for some specific cases.
 ```python
-from swagweb_rs import App, Router, DefaultConfig
-from swagweb_rs.routing import Root
-from swagweb_rs.http import Request, Response, PlaintTextResponse
+from swagweb_rs import App, DefaultConfig
+from swagweb_rs.routing import Root, Router
+from swagweb_rs.http import Request, Response, PlainTextResponse
 
 app = App().config(
     DefaultConfig(
@@ -13,9 +12,10 @@ app = App().config(
 # path argument in `.route_factory.new` must starts with the `Root`
 router = app.route_factory.new(path=[Root])
 
-@router.get([]) # will listening at localhost:8000
+# dead simple middleware. Just call a handler
+@router.get([], middleware = lambda req, handler: handler(req))
 def get(request: Request) -> Response:
-    return PlainTextResponse("Hello, world").middleware(lambda ctx: f"{ctx.response.text}!")
+    return PlainTextResponse("Hello, world")
 
 app.run()
 ```

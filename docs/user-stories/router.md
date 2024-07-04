@@ -1,8 +1,8 @@
 Simples example: create absolute router.
 ```python
-from swagweb_rs import App, Router, DefaultConfig
+from swagweb_rs import App, DefaultConfig
 from swagweb_rs.routing import Router, Root
-from swagweb_rs.http import Request, Response, PlaintTextResponse
+from swagweb_rs.http import Request, Response, PlainTextResponse
 
 app = App().config(
     DefaultConfig(
@@ -24,7 +24,7 @@ Best practice: create root router and then compose others to it. Routers will be
 ```python
 from swagweb_rs import App, Router, DefaultConfig
 from swagweb_rs.routing import Router, Root
-from swagweb_rs.http import Request, Response, PlaintTextResponse
+from swagweb_rs.http import Request, Response, PlainTextResponse
 
 app = App().config(
     DefaultConfig(
