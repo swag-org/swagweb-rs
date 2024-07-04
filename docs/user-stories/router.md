@@ -1,5 +1,5 @@
 Simples example: create absolute router.
-```
+```python
 from swagweb_rs import App, Router, DefaultConfig
 from swagweb_rs.routing import Router, Root
 from swagweb_rs.http import Request, Response, PlaintTextResponse

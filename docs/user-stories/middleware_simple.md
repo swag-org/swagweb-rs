@@ -1,5 +1,5 @@
 Response middleware for some specific cases.
-```
+```python
 from swagweb_rs import App, Router, DefaultConfig
 from swagweb_rs.routing import Root
 from swagweb_rs.http import Request, Response, PlaintTextResponse
