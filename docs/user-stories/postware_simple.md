@@ -1,4 +1,4 @@
-The concept of postware is in ability to change response according to the provided context avoiding code duplicate.
+The concept of postware is the ability to modify the response according to the provided context, avoiding code duplication.
 
 ```python
 from swagweb_rs import App, Config

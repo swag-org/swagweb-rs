@@ -17,9 +17,9 @@ myrouter = Router(path=["myrouter"])
 @router.get(["say_hello_first"], ctx=HTTPCtx, 
             tasks=[lambda ctx: print(ctx.request.ip)] # just print IP
 )
+
 def say_hello_first(request: Request) -> Response:
     return PlainTextResponse(f"Leaked IP: {request.ip}")
-
 
 @router.get(
     ["say_hello_tasks"], ctx=HTTPCtx,
