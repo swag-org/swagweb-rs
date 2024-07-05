@@ -3,8 +3,8 @@ from swagweb_rs import App, Config
 from swagweb_rs.routing import Root, Router
 from swagweb_rs.http import Request, Response, PlainTextResponse
 
-app = App().config(
-    Config(
+app = App(
+    config = Config(
         listen_on="localhost:8000"
     )
 )

@@ -4,11 +4,12 @@ from swagweb_rs.routing import Router, Root
 from swagweb_rs.http import Request, Response, PlainTextResponse
 from swagweb_rs.ctx import HTTPCtx
 
-app = App().config(
-    Config(
+app = App(
+    config = Config(
         listen_on="localhost:8000"
     )
 )
+
 root_router = app.router_factory.new(path=[Root])
 
 myrouter = Router(path=["myrouter"])

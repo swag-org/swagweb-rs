@@ -4,11 +4,12 @@ from swagweb_rs import App, Config
 from swagweb_rs.routing import Router, Root
 from swagweb_rs.http import Request, Response, PlainTextResponse
 
-app = App().config(
-    Config(
+app = App(
+    config = Config(
         listen_on="localhost:8000"
     )
 )
+
 router = app.router_factory.new(path=[Root, "myrouter"]) # absolute router
 
 # will listening at localhost:8000/myrouter/say_hello
@@ -26,8 +27,8 @@ from swagweb_rs import App, Router, Config
 from swagweb_rs.routing import Router, Root
 from swagweb_rs.http import Request, Response, PlainTextResponse
 
-app = App().config(
-    Config(
+app = App(
+    config = Config(
         listen_on="localhost:8000"
     )
 )
