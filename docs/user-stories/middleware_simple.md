@@ -1,10 +1,10 @@
 ```python
-from swagweb_rs import App, DefaultConfig
+from swagweb_rs import App, Config
 from swagweb_rs.routing import Root, Router
 from swagweb_rs.http import Request, Response, PlainTextResponse
 
 app = App().config(
-    DefaultConfig(
+    Config(
         listen_on="localhost:8000"
     )
 )

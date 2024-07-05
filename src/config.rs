@@ -4,15 +4,15 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 
 #[pyclass(get_all, module = "swagweb_rs")]
 pub struct Config {
-    pub addr: String,
+    pub listen_on: String,
 }
 
 #[pymethods]
 impl Config {
     #[new]
-    fn new(addr: String) -> PyResult<Self> {
-        addr.to_socket_addrs()
-            .map_err(|_| PyValueError::new_err(format!("invalid address \"{addr}\"")))?;
-        Ok(Self { addr })
+    fn new(listen_on: String) -> PyResult<Self> {
+        listen_on.to_socket_addrs()
+            .map_err(|_| PyValueError::new_err(format!("invalid address \"{listen_on}\". Must have following format: IP:PORT")))?;
+        Ok(Self { listen_on })
     }
 }

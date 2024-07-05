@@ -1,12 +1,12 @@
 The concept of postware is in ability to change response according to the provided context avoiding code duplicate.
 
 ```python
-from swagweb_rs import App, DefaultConfig
+from swagweb_rs import App, Config
 from swagweb_rs.routing import Root, Router
 from swagweb_rs.http import Request, Response, PlainTextResponse
 
 app = App().config(
-    DefaultConfig(
+    Config(
         listen_on="localhost:8000"
     )
 )
@@ -23,13 +23,13 @@ app.run()
 
 Another way to declare a postware, that will work for all responses
 ```python
-from swagweb_rs import App, DefaultConfig
+from swagweb_rs import App, Config
 from swagweb_rs.routing import Root, Router
 from swagweb_rs.http import Request, Response, PlainTextResponse
 from swagweb_rs.ctx import HTTPCtx
 
 app = App().config(
-    DefaultConfig(
+    Config(
         listen_on="localhost:8000"
     )
 )
