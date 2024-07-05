@@ -35,7 +35,7 @@ app = App(
 # Here we use `new` to get all the middleware defined by the application as a global.
 root_router = app.router_factory.new(path=[Root]) # absolute
 
-router = Router(path=["myrouter"]) # relative, because not starting with the `Root`
+route  = Router(path=["myrouter"]) # relative, because not starting with the `Root`
 
 @router.get(["say_hello"])
 def get(request: Request) -> Response:
