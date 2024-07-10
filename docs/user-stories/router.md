@@ -1,50 +1,50 @@
-Simples example: create absolute router.
 ```python
-from swagweb_rs import App, Config
-from swagweb_rs.routing import Router, Root
-from swagweb_rs.http import Request, Response, PlainTextResponse
+from swagweb_rs import App
+from swagweb_rs.routing import Router
+from swagweb_rs.http import Request, PlainTextResponse
 
-app = App(
-    config = Config(
-        listen_on="localhost:8000"
-    )
-)
+app = App()
 
-router = app.router_factory.new(path=[Root, "myrouter"]) # absolute router
+router = Router("/router")
 
-# will listening at localhost:8000/myrouter/say_hello
-@router.get(["say_hello"])
-def get(request: Request) -> Response:
+@router.get("/say_hello")
+def get(request: Request):
     return PlainTextResponse("Hello from swagweb!")
 
+app.compose(router)
 app.run()
 ```
-
-Best practice: create root router and then compose others to it. Routers will be relative, but composed versions will be absolute.
-
 ```python
-from swagweb_rs import App, Router, Config
-from swagweb_rs.routing import Router, Root
-from swagweb_rs.http import Request, Response, PlainTextResponse
+from swagweb_rs import App
+from swagweb_rs.routing import Router
+from swagweb_rs.http import Request, PlainTextResponse, Context
 
-app = App(
-    config = Config(
-        listen_on="localhost:8000"
-    )
-)
-# Here we use `new` to get all the middleware defined by the application as a global.
-root_router = app.router_factory.new(path=[Root]) # absolute
+app = App()
 
-route  = Router(path=["myrouter"]) # relative, because not starting with the `Root`
+router = Router()
 
-@router.get(["say_hello"])
-def get(request: Request) -> Response:
+def tracing(ctx: Context):
+    trace_id = next_trace_id()
+    print(f"Request {trace_id} started")
+    ctx.var("trace-id", trace_id)
+    ctx.next()
+    print(f"Request {trace_id} finished")
+
+router.on(tracing)
+
+authenticated_router = Router("/safe")
+
+def authenticated(ctx: Context):
+    ...
+
+authenticated_router.on(authenticated)
+
+@authenticated_router.get("/say_hello")
+def get(request: Request):
     return PlainTextResponse("Hello from swagweb!")
 
-# `.route_factory.add` allow only routers starts with the `Root` (.compose here will do that for us)
-# Router.compose -> Router
-app.router_factory.add(root_router.compose(router))
+router.compose(authenticated_router)
 
+app.compose(router)
 app.run()
 ```
-
