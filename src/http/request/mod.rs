@@ -4,15 +4,16 @@ use std::{
     net::SocketAddrV4,
 };
 
-use method::HttpMethod;
-use py_socket_addr_v4::PySocketAddrV4;
 use pyo3::{
     exceptions::{PyIOError, PyValueError},
     prelude::*,
 };
 
-pub mod method;
-pub mod py_socket_addr_v4;
+mod method;
+mod py_socket_addr_v4;
+
+pub use method::HttpMethod;
+pub use py_socket_addr_v4::PySocketAddrV4;
 
 fn read_request_info(
     lines: &mut Lines<BufReader<impl Read>>,
