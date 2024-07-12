@@ -19,11 +19,11 @@ impl HttpRequestBody {
     pub fn from_reader(reader: &mut RequestReader, headers: &HttpHeaders) -> PyResult<Self> {
         let content_type = headers
             .get("Content-Type")
-            .ok_or(PyValueError::new_err("No Content-Type header"))?;
+            .ok_or_else(|| PyValueError::new_err("No Content-Type header"))?;
         let mut parts = content_type.split("; ");
         let mime = parts
             .next()
-            .ok_or(PyValueError::new_err("Empty Content-Type header"))?;
+            .ok_or_else(|| PyValueError::new_err("Empty Content-Type header"))?;
         if mime.starts_with("text/") || mime.starts_with("application/") {
             let mut b = String::with_capacity(
                 headers

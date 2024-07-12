@@ -27,8 +27,8 @@ fn read_request_info(lines: &mut RequestReader) -> PyResult<(HttpMethod, String,
     }
     let line = lines
         .next()
-        .ok_or(PyValueError::new_err("Empty http request"))??;
-    inner(line).ok_or(PyValueError::new_err("Malformed http request"))
+        .ok_or_else(|| PyValueError::new_err("Empty http request"))??;
+    inner(line).ok_or_else(|| PyValueError::new_err("Malformed http request"))
 }
 
 #[pyclass(get_all)]

@@ -3,10 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use pyo3::{
-    exceptions::{PyValueError},
-    prelude::*,
-};
+use pyo3::{exceptions::PyValueError, prelude::*};
 
 use crate::utils::RequestReader;
 
@@ -39,13 +36,13 @@ impl HttpHeaders {
         loop {
             let line = reader
                 .next()
-                .ok_or(PyValueError::new_err("Request unexpectedly ended"))??;
+                .ok_or_else(|| PyValueError::new_err("Request unexpectedly ended"))??;
             if line == "" {
                 break;
             }
             let semi = line
                 .find(": ")
-                .ok_or(PyValueError::new_err("Invalid header"))?;
+                .ok_or_else(|| PyValueError::new_err("Invalid header"))?;
             let header_name = line[..semi].to_owned();
             let header_value = line[semi + 2..].to_owned();
             map.insert(header_name, header_value);
