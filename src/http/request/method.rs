@@ -33,6 +33,7 @@ impl IntoPy<Py<PyAny>> for HttpMethod {
             HttpMethod::Post => "POST",
             HttpMethod::Patch => "PATCH",
             HttpMethod::Delete => "DELETE",
-        }.into_py(py)
+        }
+        .into_py(py)
     }
 }
