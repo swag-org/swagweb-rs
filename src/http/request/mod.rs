@@ -2,17 +2,17 @@ use std::{
     collections::HashMap,
     io::{BufRead, BufReader, Lines, Read},
     net::SocketAddrV4,
-    ops::{Deref, DerefMut},
 };
 
 use method::HttpMethod;
+use py_socket_addr_v4::PySocketAddrV4;
 use pyo3::{
     exceptions::{PyIOError, PyValueError},
     prelude::*,
-    types::PyString,
 };
 
 pub mod method;
+pub mod py_socket_addr_v4;
 
 fn read_request_info(
     lines: &mut Lines<BufReader<impl Read>>,
@@ -67,31 +67,6 @@ fn read_request_content(
     Ok(content)
 }
 
-#[derive(Debug, Clone)]
-struct PySocketAddrV4(SocketAddrV4);
-
-impl IntoPy<Py<PyAny>> for PySocketAddrV4 {
-    fn into_py(self, py: Python<'_>) -> Py<PyAny> {
-        PyString::new_bound(py, &format!("{}:{}", self.0.ip(), self.0.port()))
-            .unbind()
-            .into_any()
-    }
-}
-
-impl Deref for PySocketAddrV4 {
-    type Target = SocketAddrV4;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for PySocketAddrV4 {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 #[pyclass(get_all)]
 #[derive(Debug)]
 pub struct HttpRequest {
@@ -110,7 +85,7 @@ impl HttpRequest {
         let headers = read_request_headers(&mut lines)?;
         let content = read_request_content(lines, &headers)?;
         Ok(HttpRequest {
-            ip: PySocketAddrV4(ip),
+            ip: ip.into(),
             ver,
             path,
             method,
