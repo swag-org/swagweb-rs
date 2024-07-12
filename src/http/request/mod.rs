@@ -1,22 +1,29 @@
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader, Lines, Read},
+    net::SocketAddrV4,
 };
 
-use method::HttpMethod;
 use pyo3::{
     exceptions::{PyIOError, PyValueError},
     prelude::*,
 };
 
-pub mod method;
+mod method;
+mod py_socket_addr_v4;
 
-fn read_request_info(lines: &mut Lines<BufReader<impl Read>>) -> PyResult<(HttpMethod, String)> {
-    fn inner(line: String) -> Option<(HttpMethod, String)> {
+pub use method::HttpMethod;
+pub use py_socket_addr_v4::PySocketAddrV4;
+
+fn read_request_info(
+    lines: &mut Lines<BufReader<impl Read>>,
+) -> PyResult<(HttpMethod, String, String)> {
+    fn inner(line: String) -> Option<(HttpMethod, String, String)> {
         let mut split = line.split(" ");
         let method = split.next()?;
         let path = split.next()?.into();
-        Some((HttpMethod::try_from(method)?, path))
+        let ver = split.next()?.into();
+        Some((HttpMethod::try_from(method)?, path, ver))
     }
     inner(
         lines
@@ -64,7 +71,8 @@ fn read_request_content(
 #[pyclass(get_all)]
 #[derive(Debug)]
 pub struct HttpRequest {
-    ip: String,
+    ip: PySocketAddrV4,
+    ver: String,
     path: String,
     method: HttpMethod,
     headers: HashMap<String, String>,
@@ -72,13 +80,14 @@ pub struct HttpRequest {
 }
 
 impl HttpRequest {
-    pub fn from_reader(ip: String, reader: impl Read) -> PyResult<Self> {
+    pub fn from_reader(ip: SocketAddrV4, reader: impl Read) -> PyResult<Self> {
         let mut lines = BufReader::new(reader).lines();
-        let (method, path) = read_request_info(&mut lines)?;
+        let (method, path, ver) = read_request_info(&mut lines)?;
         let headers = read_request_headers(&mut lines)?;
         let content = read_request_content(lines, &headers)?;
         Ok(HttpRequest {
-            ip,
+            ip: ip.into(),
+            ver,
             path,
             method,
             headers,
@@ -89,6 +98,8 @@ impl HttpRequest {
 
 #[cfg(test)]
 mod tests {
+    use std::net::{Ipv4Addr, SocketAddrV4};
+
     use super::HttpRequest;
 
     #[test]
@@ -96,7 +107,7 @@ mod tests {
         println!(
             "{:?}",
             HttpRequest::from_reader(
-                "0.0.0.0".into(),
+                SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8080),
                 &b"POST / HTTP/1.1
 Host: localhost:8080
 
