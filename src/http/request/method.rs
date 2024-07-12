@@ -1,6 +1,5 @@
 use pyo3::prelude::*;
 
-#[pyclass]
 #[derive(Clone, Debug)]
 pub enum HttpMethod {
     Get,
@@ -22,5 +21,18 @@ impl HttpMethod {
             "DELETE" => Some(HttpMethod::Delete),
             _ => None,
         }
+    }
+}
+
+impl IntoPy<Py<PyAny>> for HttpMethod {
+    fn into_py(self, py: Python<'_>) -> Py<PyAny> {
+        match self {
+            HttpMethod::Get => "GET",
+            HttpMethod::Put => "PUT",
+            HttpMethod::Head => "HEAD",
+            HttpMethod::Post => "POST",
+            HttpMethod::Patch => "PATCH",
+            HttpMethod::Delete => "DELETE",
+        }.into_py(py)
     }
 }
