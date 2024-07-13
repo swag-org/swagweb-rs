@@ -1,24 +1,28 @@
-use std::io::BufRead;
+use std::io::{self, BufRead};
+use thiserror::Error;
 
-use pyo3::{
-    exceptions::{PyIOError, PyValueError},
-    PyResult,
-};
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Cannot read request: {0}")]
+    ReadFailed(#[from] io::Error),
+    #[error("No CRLF at the end of line")]
+    NoCRLF,
+}
 
-pub struct RequestReader(Box<dyn BufRead>);
+pub type Result = std::result::Result<String, Error>;
 
-impl Iterator for RequestReader {
-    type Item = PyResult<String>;
+pub struct Reader(Box<dyn BufRead>);
+
+impl Iterator for Reader {
+    type Item = Result;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut b = String::new();
         return match self.0.read_line(&mut b) {
             Ok(0) => None,
-            Err(e) => Some(Err(PyIOError::new_err(format!(
-                "Request reading failed: {e}"
-            )))),
+            Err(e) => Some(Err(e.into())),
             _ if !b.ends_with("\r\n") => {
-                return Some(Err(PyValueError::new_err("No CRLF at the end of line")));
+                return Some(Err(Error::NoCRLF));
             }
             _ => {
                 b.pop();
@@ -29,7 +33,7 @@ impl Iterator for RequestReader {
     }
 }
 
-impl RequestReader {
+impl Reader {
     pub fn new(inner: Box<dyn BufRead>) -> Self {
         Self(inner)
     }
