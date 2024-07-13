@@ -1,10 +1,8 @@
-use pyo3::{
-    exceptions::{PyIOError, PyValueError},
-    prelude::*,
-};
+use pyo3::prelude::*;
 
-use crate::utils::RequestReader;
+use crate::utils::request_reader;
 
+use super::error::{Error, Result};
 use super::HttpHeaders;
 
 #[pyclass(get_all)]
@@ -16,14 +14,16 @@ pub struct HttpRequestBody {
 }
 
 impl HttpRequestBody {
-    pub fn from_reader(reader: &mut RequestReader, headers: &HttpHeaders) -> PyResult<Self> {
-        let content_type = headers
-            .get("Content-Type")
-            .ok_or(PyValueError::new_err("No Content-Type header"))?;
+    pub fn from_reader(reader: &mut request_reader::Reader, headers: &HttpHeaders) -> Result<Self> {
+        let content_type = headers.get("Content-Type").ok_or(Error::InvalidHeader(
+            "Content-Type".into(),
+            "<not present>".into(),
+        ))?;
         let mut parts = content_type.split("; ");
-        let mime = parts
-            .next()
-            .ok_or(PyValueError::new_err("Empty Content-Type header"))?;
+        let mime = parts.next().ok_or(Error::InvalidHeader(
+            "Content-Type".into(),
+            "<empty>".into(),
+        ))?;
         if mime.starts_with("text/") || mime.starts_with("application/") {
             let mut b = String::with_capacity(
                 headers
@@ -34,7 +34,7 @@ impl HttpRequestBody {
             reader
                 .inner()
                 .read_to_string(&mut b)
-                .map_err(|e| PyIOError::new_err(format!("Request reading failed: {e}")))?;
+                .map_err(|e| request_reader::Error::ReadFailed(e))?;
             return Ok(Self {
                 text: Some(b),
                 fields: None,
