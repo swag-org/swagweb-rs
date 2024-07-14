@@ -1,6 +1,6 @@
-use std::sync::Arc;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use std::sync::Arc;
+
 use pyo3::PyAny;
 
 use crate::http::context::HttpContext;
@@ -20,7 +20,9 @@ impl Callback {
 }
 
 impl Callback {
-    fn new(callback_function: Box<dyn Fn(&mut HttpContext) -> PyResult<HttpResponse> + Send + Sync>) -> Self {
+    fn new(
+        callback_function: Box<dyn Fn(&mut HttpContext) -> PyResult<HttpResponse> + Send + Sync>,
+    ) -> Self {
         Callback { callback_function }
     }
 }
@@ -43,17 +45,15 @@ pub struct NextMiddleware {
     middleware: Box<MiddlewareEnum>,
 }
 
-
 #[pyclass]
 #[derive(Clone)]
 pub struct HandlerMiddleware {
-    context: HttpContext,
     handler: Arc<dyn Fn(&mut HttpContext) -> HttpResponse + Send + Sync>,
 }
 
 impl MiddlewareBehaviour for HandlerMiddleware {
     fn execute(&self, context: &mut HttpContext) -> PyResult<HttpResponse> {
-        Ok((self.handler)(context)) 
+        Ok((self.handler)(context))
     }
 
     fn get_next(&self) -> Option<NextMiddleware> {
@@ -87,7 +87,7 @@ impl MiddlewareBehaviour for PyMiddleware {
         self.next = next;
     }
 
-    fn execute(&self, context: &mut HttpContext) -> PyResult<HttpResponse> {
+    fn execute(&self, _context: &mut HttpContext) -> PyResult<HttpResponse> {
         //let cb = match self.get_next() {
         //    None => Box::new(|context: &mut HttpContext| Err(pyo3::exceptions::PyValueError::new_err("Can't call next middleware, because it is None"))),
         //    Some(next) => {
@@ -97,27 +97,32 @@ impl MiddlewareBehaviour for PyMiddleware {
         //        }
         //    }
         //};
-        let cb: Box<dyn Fn(&mut HttpContext) -> PyResult<HttpResponse> + Send + Sync> = match self.get_next() {
-            None => Box::new(|_context: &mut HttpContext| Err(pyo3::exceptions::PyValueError::new_err("Can't call next middleware, because it is None"))),
-            Some(next) => {
-                match *next.middleware {
-                    MiddlewareEnum::Handler(middleware) => Box::new(move |context: &mut HttpContext| middleware.execute(context)),
-                    MiddlewareEnum::PyMiddleware(middleware) => Box::new(move |context: &mut HttpContext| middleware.execute(context)),
-                }
-            }
-        };
-
+        let cb: Box<dyn Fn(&mut HttpContext) -> PyResult<HttpResponse> + Send + Sync> =
+            match self.get_next() {
+                None => Box::new(|_context: &mut HttpContext| {
+                    Err(pyo3::exceptions::PyValueError::new_err(
+                        "Can't call next middleware, because it is None",
+                    ))
+                }),
+                Some(next) => match *next.middleware {
+                    MiddlewareEnum::Handler(middleware) => {
+                        Box::new(move |context: &mut HttpContext| middleware.execute(context))
+                    }
+                    MiddlewareEnum::PyMiddleware(middleware) => {
+                        Box::new(move |context: &mut HttpContext| middleware.execute(context))
+                    }
+                },
+            };
 
         Python::with_gil(|py| {
             let callback = Callback::new(cb);
-            let py_func = self.py_fn.as_ref(py);
+            let py_func = self.py_fn.bind(py);
             let result = py_func.call1((callback.into_py(py),))?;
             let http_response: HttpResponse = result.extract()?;
             Ok(http_response)
         })
     }
 }
-
 
 impl IntoPy<Py<PyAny>> for MiddlewareEnum {
     fn into_py(self, py: Python) -> Py<PyAny> {
@@ -139,7 +144,6 @@ impl IntoPy<Py<PyMiddleware>> for PyMiddleware {
         Py::new(py, self).unwrap()
     }
 }
-
 
 //impl<'source> FromPyObject<'source> for NextMiddleware {
 //    fn extract(ob: &'source PyAny) -> PyResult<Self> {

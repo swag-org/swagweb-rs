@@ -33,12 +33,12 @@ fn read_request_info(lines: &mut request_reader::Reader) -> Result<(HttpMethod, 
 #[pyclass(get_all)]
 #[derive(Debug, Clone)]
 pub struct HttpRequest {
-    ip: PySocketAddrV4,
-    ver: String,
-    path: String,
-    method: HttpMethod,
-    headers: HttpHeaders,
-    body: HttpRequestBody,
+    pub ip: PySocketAddrV4,
+    pub ver: String,
+    pub path: String,
+    pub method: HttpMethod,
+    pub headers: HttpHeaders,
+    pub body: HttpRequestBody,
 }
 
 impl HttpRequest {
@@ -60,25 +60,44 @@ impl HttpRequest {
 
 #[cfg(test)]
 mod tests {
-    use std::net::{Ipv4Addr, SocketAddrV4};
+    use std::{
+        collections::HashMap,
+        net::{Ipv4Addr, SocketAddrV4},
+    };
+
+    use pyo3::Python;
+
+    use crate::{
+        app::extractors::{Extractor, Headers},
+        http::context::HttpContext,
+    };
 
     use super::HttpRequest;
 
     #[test]
     fn head_request() {
         pyo3::prepare_freethreaded_python();
-        match HttpRequest::from_reader(
+        let req = HttpRequest::from_reader(
             SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8080),
             Box::new(
                 &b"POST / HTTP/1.1\r
 Host: localhost:8080\r
-Content-Type: text/plain
+Content-Type: text/plain\r
 \r
-Hello, world!\r"[..],
+Hello, world!"[..],
             ),
-        ) {
-            Ok(x) => println!("{x:?}"),
-            Err(e) => println!("{e}"),
-        }
+        )
+        .unwrap();
+        Python::with_gil(move |py| {
+            let body = Headers::new().0;
+            let body = body.extract(
+                py,
+                &HttpContext {
+                    request: req,
+                    vars: HashMap::new(),
+                },
+            );
+            println!("{body}");
+        });
     }
 }
