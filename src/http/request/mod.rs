@@ -3,21 +3,22 @@ use std::{
     net::SocketAddrV4,
 };
 
-use pyo3::{exceptions::PyValueError, prelude::*};
+use body::HttpRequestBody;
+use error::{Error, Result};
+use headers::HttpHeaders;
+use method::HttpMethod;
+use py_addr::PySocketAddrV4;
+use pyo3::prelude::*;
 
-mod body;
-mod headers;
-mod method;
-mod py_addr;
+use crate::utils::request_reader;
 
-pub use body::HttpRequestBody;
-pub use headers::HttpHeaders;
-pub use method::HttpMethod;
-pub use py_addr::PySocketAddrV4;
+pub mod body;
+pub mod error;
+pub mod headers;
+pub mod method;
+pub mod py_addr;
 
-use crate::utils::RequestReader;
-
-fn read_request_info(lines: &mut RequestReader) -> PyResult<(HttpMethod, String, String)> {
+fn read_request_info(lines: &mut request_reader::Reader) -> Result<(HttpMethod, String, String)> {
     fn inner(line: String) -> Option<(HttpMethod, String, String)> {
         let mut split = line.split(" ");
         let method = split.next()?;
@@ -25,10 +26,8 @@ fn read_request_info(lines: &mut RequestReader) -> PyResult<(HttpMethod, String,
         let ver = split.next()?.into();
         Some((HttpMethod::try_from(method)?, path, ver))
     }
-    let line = lines
-        .next()
-        .ok_or(PyValueError::new_err("Empty http request"))??;
-    inner(line).ok_or(PyValueError::new_err("Malformed http request"))
+    let line = lines.next().ok_or(Error::EmptyHttpRequest)??;
+    inner(line).ok_or(Error::MalformedRequest)
 }
 
 #[pyclass(get_all)]
@@ -43,8 +42,8 @@ pub struct HttpRequest {
 }
 
 impl HttpRequest {
-    pub fn from_reader(ip: SocketAddrV4, reader: Box<dyn Read>) -> PyResult<Self> {
-        let mut reader = RequestReader::new(Box::new(BufReader::new(reader)));
+    pub fn from_reader(ip: SocketAddrV4, reader: Box<dyn Read>) -> Result<Self> {
+        let mut reader = request_reader::Reader::new(Box::new(BufReader::new(reader)));
         let (method, path, ver) = read_request_info(&mut reader)?;
         let headers = HttpHeaders::from_reader(&mut reader)?;
         let body = HttpRequestBody::from_reader(&mut reader, &headers)?;
@@ -73,7 +72,7 @@ mod tests {
             Box::new(
                 &b"POST / HTTP/1.1\r
 Host: localhost:8080\r
-Content-Type: text/plain\r
+Content-Type: text/plain
 \r
 Hello, world!\r"[..],
             ),
