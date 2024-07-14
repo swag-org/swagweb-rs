@@ -1,6 +1,5 @@
 use pyo3::{pyclass, pymethods};
 
-
 #[pyclass(get_all)]
 #[derive(Clone)]
 pub struct HttpResponse {
@@ -11,6 +10,6 @@ pub struct HttpResponse {
 impl HttpResponse {
     #[new]
     pub fn new(status: u16) -> Self {
-        HttpResponse{status}
+        HttpResponse { status }
     }
 }

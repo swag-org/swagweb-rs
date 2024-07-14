@@ -8,9 +8,9 @@ use super::HttpHeaders;
 #[pyclass(get_all)]
 #[derive(Debug, Clone)]
 pub struct HttpRequestBody {
-    text: Option<String>,
-    fields: Option<Vec<String>>,
-    files: Option<Vec<()>>,
+    pub text: String,
+    pub fields: Option<Vec<String>>,
+    pub files: Option<Vec<()>>,
 }
 
 impl HttpRequestBody {
@@ -36,7 +36,7 @@ impl HttpRequestBody {
                 .read_to_string(&mut b)
                 .map_err(|e| request_reader::Error::ReadFailed(e))?;
             return Ok(Self {
-                text: Some(b),
+                text: b,
                 fields: None,
                 files: None,
             });
