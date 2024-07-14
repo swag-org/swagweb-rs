@@ -32,7 +32,7 @@ fn read_request_info(lines: &mut RequestReader) -> PyResult<(HttpMethod, String,
 }
 
 #[pyclass(get_all)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HttpRequest {
     ip: PySocketAddrV4,
     ver: String,
