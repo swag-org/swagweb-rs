@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use pyo3::{
     exceptions::PyValueError,
     pyclass, pymethods,
@@ -56,8 +58,18 @@ impl Body {
 impl Extractor for Body {
     fn extract(&self, py: Python, ctx: &HttpContext) -> PyObject {
         match self.0 {
-            BodyKind::String => ctx.request.text.as_ref().into_py(py),
-            BodyKind::Bytes => ctx.request.text.as_ref().map(|x| x.as_bytes()).into_py(py),
+            BodyKind::String => ctx
+                .request
+                .content
+                .as_ref()
+                .map(|x| unsafe { String::from_utf8_unchecked(x.clone()) })
+                .into_py(py),
+            BodyKind::Bytes => ctx
+                .request
+                .content
+                .as_ref()
+                .map(|x| x.as_slice())
+                .into_py(py),
         }
     }
 

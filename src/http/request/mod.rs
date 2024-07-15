@@ -1,94 +1,156 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    mem::forget,
+    path::{Path, PathBuf},
+};
 
-use futures_util::{future, StreamExt};
-use http_body_util::{BodyExt, BodyStream};
+use futures_util::{future, Stream, StreamExt};
+use http::{header::CONTENT_LENGTH, request::Parts};
+use http_body_util::BodyStream;
 use hyper::{
-    body::Incoming,
-    header::{CONTENT_LENGTH, CONTENT_TYPE},
+    body::{Bytes, Incoming},
+    header::CONTENT_TYPE,
 };
 use multer::Multipart;
 use pyo3::pyclass;
+use tempfile::tempdir;
 use thiserror::Error;
+use tokio::{fs::File, io::AsyncWriteExt};
 
-#[derive(Error, Debug)]
-pub enum Error {}
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Transport failed: {0}")]
+    TransportFail(#[from] hyper::Error),
+    #[error("Multipart failed: {0}")]
+    MultipartFail(#[from] multer::Error),
+    #[error("Invalid multipart data: {0}")]
+    MalformedMultipart(String),
+}
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone)]
 #[pyclass(get_all)]
 pub struct Request {
-    pub method: String,
     pub uri: String,
-    pub version: String,
+    pub method: String,
     pub headers: HashMap<String, String>,
-    pub text: Option<String>,
+    pub content: Option<Vec<u8>>,
     pub fields: Option<HashMap<String, String>>,
+    pub files: Option<Vec<String>>,
+    pub files_dir: Option<PathBuf>,
 }
 
-pub async fn parse(req: hyper::Request<Incoming>) -> Result<Request> {
-    let boundary = req
-        .headers()
-        .get(CONTENT_TYPE)
-        .and_then(|c| c.to_str().ok())
-        .and_then(|c| multer::parse_boundary(c).ok());
+impl Request {
+    pub async fn parse(request: hyper::Request<Incoming>) -> Result<Self> {
+        let (parts, body) = request.into_parts();
 
-    let (parts, body) = req.into_parts();
+        let uri = parts.uri.to_string();
+        let method = parts.method.to_string();
+        let headers = convert_headers(&parts);
 
-    let body_stream = BodyStream::new(body)
-        .filter_map(|x| async move { x.map(|f| f.into_data().ok()).transpose() });
-
-    let mut text = None;
-    let mut fields = None;
-    if let Some(boundary) = boundary {
-        let mut fields_map = HashMap::new();
-        let mut m = Multipart::new(body_stream, boundary);
-        while let Ok(Some(field)) = m.next_field().await {
-            if field.file_name().is_some() {
-                // Not support files yet
-                continue;
-            }
-            if let Some(name) = field.name() {
-                let name = name.to_owned();
-                if let Ok(value) = field.bytes().await {
-                    if let Ok(value) = String::from_utf8(value.to_vec()) {
-                        fields_map.insert(name.into(), value);
+        let boundary = extract_boundary(&parts);
+        let stream = body_to_stream(body);
+        if let Some(boundary) = boundary {
+            let mut fields = HashMap::new();
+            let mut files = vec![];
+            let dir = tempdir().unwrap();
+            let mut m = Multipart::new(stream, boundary);
+            while let Some(mut field) = m.next_field().await? {
+                if let Some(fname) = field.file_name() {
+                    let fname = fname.to_string();
+                    if fname.contains('/') || fname.contains('\\') {
+                        Err(Error::MalformedMultipart("Filename contains slashes, so it might be misinterpreted by path resolver".into()))?;
+                    }
+                    let mut file = File::create_new(dir.path().join(&fname)).await.unwrap();
+                    while let Some(chunk) = field.chunk().await? {
+                        file.write(&chunk).await.unwrap();
+                    }
+                    files.push(fname);
+                } else {
+                    if let Some(name) = field.name() {
+                        let name = name.into();
+                        let value = field.bytes().await?;
+                        fields.insert(
+                            name,
+                            String::from_utf8(value.to_vec())
+                                .map_err(|_| Error::MalformedMultipart("xc".into()))?,
+                        );
                     }
                 }
             }
-        }
-        fields = Some(fields_map);
-    } else {
-        text = Some(String::with_capacity(
-            parts
-                .headers
-                .get(CONTENT_LENGTH)
-                .and_then(|x| std::str::from_utf8(x.as_bytes()).ok())
-                .and_then(|x| x.parse().ok())
-                .unwrap_or(0),
-        ));
-        body_stream
-            .filter_map(|x| async move { x.ok().and_then(|x| String::from_utf8(x.to_vec()).ok()) })
-            .for_each(|x| {
-                text.as_mut().unwrap().push_str(&x);
-                future::ready(())
+            Ok(Request {
+                uri,
+                method,
+                headers,
+                content: None,
+                fields: Some(fields),
+                files: Some(files),
+                files_dir: Some(dir.into_path()),
             })
-            .await;
-    }
-
-    let mut headers = HashMap::new();
-    for (k, v) in parts.headers.into_iter() {
-        if let (Some(k), Ok(v)) = (k, String::from_utf8(v.as_bytes().to_owned())) {
-            headers.insert(k.to_string(), v);
+        } else {
+            Ok(Request {
+                uri,
+                method,
+                headers,
+                content: Some(read_plain(&parts, stream).await?),
+                fields: None,
+                files: None,
+                files_dir: None,
+            })
         }
     }
+}
 
-    Ok(Request {
-        method: parts.method.to_string(),
-        uri: parts.uri.to_string(),
-        version: format!("{:?}", parts.version),
-        headers,
-        text,
-        fields,
-    })
+fn convert_headers(parts: &Parts) -> HashMap<String, String> {
+    let mut r = HashMap::new();
+    for (name, value) in &parts.headers {
+        if let Ok(value) = value.to_str() {
+            r.insert(name.to_string(), value.into());
+        }
+    }
+    r
+}
+
+fn extract_boundary(parts: &Parts) -> Option<String> {
+    parts
+        .headers
+        .get(CONTENT_TYPE)
+        .and_then(|c| c.to_str().ok())
+        .and_then(|c| multer::parse_boundary(c).ok())
+}
+
+fn body_to_stream(body: Incoming) -> impl Stream<Item = hyper::Result<Bytes>> {
+    BodyStream::new(body).filter_map(|x| async move { x.map(|f| f.into_data().ok()).transpose() })
+}
+
+async fn read_plain(
+    parts: &Parts,
+    stream: impl Stream<Item = hyper::Result<Bytes>>,
+) -> Result<Vec<u8>> {
+    let mut bytes = Vec::with_capacity(
+        parts
+            .headers
+            .get(CONTENT_LENGTH)
+            .and_then(|c| c.to_str().ok())
+            .and_then(|c| c.parse::<usize>().ok())
+            .unwrap_or(0),
+    );
+    let mut fail = None::<hyper::Error>;
+    stream
+        .for_each(|item| {
+            if fail.is_none() {
+                match item {
+                    Ok(b) => bytes.extend(b),
+                    Err(e) => fail = Some(e),
+                }
+            }
+            future::ready(())
+        })
+        .await;
+    if let Some(fail) = fail {
+        Err(fail)?
+    } else {
+        Ok(bytes)
+    }
 }

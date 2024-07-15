@@ -1,8 +1,11 @@
+use hyper::body::Incoming;
+use hyper::Request;
 use pyo3::prelude::*;
 use std::sync::Arc;
 
 use pyo3::PyAny;
 
+use crate::http;
 use crate::http::context::HttpContext;
 use crate::http::response::HttpResponse;
 
