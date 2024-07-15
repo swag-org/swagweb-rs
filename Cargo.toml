@@ -9,5 +9,10 @@ name = "swagweb_rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = "0.21.1"
+hyper = { version = "1.4.1", features = ["full"] }
+tokio = { version = "1.38.0", features = ["full"] }
+multer = { version = "3.1.0", features = ["all"] }
 thiserror = "1.0.62"
+pyo3 = "0.21.1"
+http-body-util = "0.1.2"
+futures-util = "0.3.30"

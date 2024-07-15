@@ -1,103 +1,94 @@
-use std::{
-    io::{BufReader, Read},
-    net::SocketAddrV4,
+use std::collections::HashMap;
+
+use futures_util::{future, StreamExt};
+use http_body_util::{BodyExt, BodyStream};
+use hyper::{
+    body::Incoming,
+    header::{CONTENT_LENGTH, CONTENT_TYPE},
 };
+use multer::Multipart;
+use pyo3::pyclass;
+use thiserror::Error;
 
-use body::HttpRequestBody;
-use error::{Error, Result};
-use headers::HttpHeaders;
-use method::HttpMethod;
-use py_addr::PySocketAddrV4;
-use pyo3::prelude::*;
+#[derive(Error, Debug)]
+pub enum Error {}
 
-use crate::utils::request_reader;
+pub type Result<T> = std::result::Result<T, Error>;
 
-pub mod body;
-pub mod error;
-pub mod headers;
-pub mod method;
-pub mod py_addr;
-
-fn read_request_info(lines: &mut request_reader::Reader) -> Result<(HttpMethod, String, String)> {
-    fn inner(line: String) -> Option<(HttpMethod, String, String)> {
-        let mut split = line.split(" ");
-        let method = split.next()?;
-        let path = split.next()?.into();
-        let ver = split.next()?.into();
-        Some((HttpMethod::try_from(method)?, path, ver))
-    }
-    let line = lines.next().ok_or(Error::EmptyHttpRequest)??;
-    inner(line).ok_or(Error::MalformedRequest)
-}
-
+#[derive(Clone)]
 #[pyclass(get_all)]
-#[derive(Debug, Clone)]
-pub struct HttpRequest {
-    pub ip: PySocketAddrV4,
-    pub ver: String,
-    pub path: String,
-    pub method: HttpMethod,
-    pub headers: HttpHeaders,
-    pub body: HttpRequestBody,
+pub struct Request {
+    pub method: String,
+    pub uri: String,
+    pub version: String,
+    pub headers: HashMap<String, String>,
+    pub text: Option<String>,
+    pub fields: Option<HashMap<String, String>>,
 }
 
-impl HttpRequest {
-    pub fn from_reader(ip: SocketAddrV4, reader: Box<dyn Read>) -> Result<Self> {
-        let mut reader = request_reader::Reader::new(Box::new(BufReader::new(reader)));
-        let (method, path, ver) = read_request_info(&mut reader)?;
-        let headers = HttpHeaders::from_reader(&mut reader)?;
-        let body = HttpRequestBody::from_reader(&mut reader, &headers)?;
-        Ok(HttpRequest {
-            ip: ip.into(),
-            ver,
-            path,
-            method,
-            headers,
-            body,
-        })
+pub async fn parse(req: hyper::Request<Incoming>) -> Result<Request> {
+    let boundary = req
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|c| c.to_str().ok())
+        .and_then(|c| multer::parse_boundary(c).ok());
+
+    let (parts, body) = req.into_parts();
+
+    let body_stream = BodyStream::new(body)
+        .filter_map(|x| async move { x.map(|f| f.into_data().ok()).transpose() });
+
+    let mut text = None;
+    let mut fields = None;
+    if let Some(boundary) = boundary {
+        let mut fields_map = HashMap::new();
+        let mut m = Multipart::new(body_stream, boundary);
+        while let Ok(Some(field)) = m.next_field().await {
+            if field.file_name().is_some() {
+                // Not support files yet
+                continue;
+            }
+            if let Some(name) = field.name() {
+                let name = name.to_owned();
+                if let Ok(value) = field.bytes().await {
+                    if let Ok(value) = String::from_utf8(value.to_vec()) {
+                        fields_map.insert(name.into(), value);
+                    }
+                }
+            }
+        }
+        fields = Some(fields_map);
+    } else {
+        text = Some(String::with_capacity(
+            parts
+                .headers
+                .get(CONTENT_LENGTH)
+                .and_then(|x| std::str::from_utf8(x.as_bytes()).ok())
+                .and_then(|x| x.parse().ok())
+                .unwrap_or(0),
+        ));
+        body_stream
+            .filter_map(|x| async move { x.ok().and_then(|x| String::from_utf8(x.to_vec()).ok()) })
+            .for_each(|x| {
+                text.as_mut().unwrap().push_str(&x);
+                future::ready(())
+            })
+            .await;
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use std::{
-        collections::HashMap,
-        net::{Ipv4Addr, SocketAddrV4},
-    };
-
-    use pyo3::Python;
-
-    use crate::{
-        app::extractors::{Extractor, Headers},
-        http::context::HttpContext,
-    };
-
-    use super::HttpRequest;
-
-    #[test]
-    fn head_request() {
-        pyo3::prepare_freethreaded_python();
-        let req = HttpRequest::from_reader(
-            SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8080),
-            Box::new(
-                &b"POST / HTTP/1.1\r
-Host: localhost:8080\r
-Content-Type: text/plain\r
-\r
-Hello, world!"[..],
-            ),
-        )
-        .unwrap();
-        Python::with_gil(move |py| {
-            let body = Headers::new().0;
-            let body = body.extract(
-                py,
-                &HttpContext {
-                    request: req,
-                    vars: HashMap::new(),
-                },
-            );
-            println!("{body}");
-        });
+    let mut headers = HashMap::new();
+    for (k, v) in parts.headers.into_iter() {
+        if let (Some(k), Ok(v)) = (k, String::from_utf8(v.as_bytes().to_owned())) {
+            headers.insert(k.to_string(), v);
+        }
     }
+
+    Ok(Request {
+        method: parts.method.to_string(),
+        uri: parts.uri.to_string(),
+        version: format!("{:?}", parts.version),
+        headers,
+        text,
+        fields,
+    })
 }

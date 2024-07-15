@@ -56,8 +56,8 @@ impl Body {
 impl Extractor for Body {
     fn extract(&self, py: Python, ctx: &HttpContext) -> PyObject {
         match self.0 {
-            BodyKind::String => ctx.request.body.text.as_str().into_py(py),
-            BodyKind::Bytes => ctx.request.body.text.as_bytes().into_py(py),
+            BodyKind::String => ctx.request.text.as_ref().into_py(py),
+            BodyKind::Bytes => ctx.request.text.as_ref().map(|x| x.as_bytes()).into_py(py),
         }
     }
 
