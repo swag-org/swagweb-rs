@@ -62,14 +62,9 @@ impl Extractor for Body {
                 .request
                 .content
                 .as_ref()
-                .map(|x| unsafe { String::from_utf8_unchecked(x.clone()) })
+                .map(|x| std::str::from_utf8(&x).unwrap_or("<invalid UTF-8>"))
                 .into_py(py),
-            BodyKind::Bytes => ctx
-                .request
-                .content
-                .as_ref()
-                .map(|x| x.as_slice())
-                .into_py(py),
+            BodyKind::Bytes => ctx.request.content.as_ref().map(|x| x.deref()).into_py(py),
         }
     }
 

@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    mem::forget,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, mem::forget, path::PathBuf};
 
 use futures_util::{future, Stream, StreamExt};
 use http::{header::CONTENT_LENGTH, request::Parts};
@@ -12,7 +8,7 @@ use hyper::{
     header::CONTENT_TYPE,
 };
 use multer::Multipart;
-use pyo3::pyclass;
+use pyo3::{ffi::PyObject, pyclass, types::PyAnyMethods, Py, PyAny, Python};
 use tempfile::tempdir;
 use thiserror::Error;
 use tokio::{fs::File, io::AsyncWriteExt};
@@ -25,6 +21,8 @@ pub enum Error {
     MultipartFail(#[from] multer::Error),
     #[error("Invalid multipart data: {0}")]
     MalformedMultipart(String),
+    #[error("~ For future")]
+    ConstraintViolation,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -37,8 +35,7 @@ pub struct Request {
     pub headers: HashMap<String, String>,
     pub content: Option<Vec<u8>>,
     pub fields: Option<HashMap<String, String>>,
-    pub files: Option<Vec<String>>,
-    pub files_dir: Option<PathBuf>,
+    pub files: Option<HashMap<String, PathBuf>>,
 }
 
 impl Request {
@@ -53,7 +50,7 @@ impl Request {
         let stream = body_to_stream(body);
         if let Some(boundary) = boundary {
             let mut fields = HashMap::new();
-            let mut files = vec![];
+            let mut files = HashMap::new();
             let dir = tempdir().unwrap();
             let mut m = Multipart::new(stream, boundary);
             while let Some(mut field) = m.next_field().await? {
@@ -62,23 +59,26 @@ impl Request {
                     if fname.contains('/') || fname.contains('\\') {
                         Err(Error::MalformedMultipart("Filename contains slashes, so it might be misinterpreted by path resolver".into()))?;
                     }
-                    let mut file = File::create_new(dir.path().join(&fname)).await.unwrap();
+                    let path = dir.path().join(&fname);
+                    let mut file = File::create_new(&path).await.unwrap();
                     while let Some(chunk) = field.chunk().await? {
                         file.write(&chunk).await.unwrap();
                     }
-                    files.push(fname);
+                    files.insert(fname, path);
                 } else {
                     if let Some(name) = field.name() {
                         let name = name.into();
                         let value = field.bytes().await?;
                         fields.insert(
                             name,
-                            String::from_utf8(value.to_vec())
-                                .map_err(|_| Error::MalformedMultipart("xc".into()))?,
+                            String::from_utf8(value.to_vec()).map_err(|_| {
+                                Error::MalformedMultipart("Field value is not valid utf8".into())
+                            })?,
                         );
                     }
                 }
             }
+            forget(dir);
             Ok(Request {
                 uri,
                 method,
@@ -86,7 +86,6 @@ impl Request {
                 content: None,
                 fields: Some(fields),
                 files: Some(files),
-                files_dir: Some(dir.into_path()),
             })
         } else {
             Ok(Request {
@@ -96,7 +95,6 @@ impl Request {
                 content: Some(read_plain(&parts, stream).await?),
                 fields: None,
                 files: None,
-                files_dir: None,
             })
         }
     }
@@ -150,7 +148,6 @@ async fn read_plain(
         .await;
     if let Some(fail) = fail {
         Err(fail)?
-    } else {
-        Ok(bytes)
     }
+    Ok(bytes)
 }
