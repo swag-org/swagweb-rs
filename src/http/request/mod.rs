@@ -12,6 +12,7 @@ use pyo3::pyclass;
 use tempfile::tempdir;
 use thiserror::Error;
 use tokio::{fs::File, io::AsyncWriteExt};
+use uuid::Uuid;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -42,7 +43,7 @@ pub struct Request {
     #[pyo3(get)]
     pub fields: Option<HashMap<String, String>>,
     #[pyo3(get)]
-    pub files: Option<HashMap<String, PathBuf>>,
+    pub files: Option<Vec<(String, PathBuf)>>,
 }
 
 impl Request {
@@ -57,21 +58,19 @@ impl Request {
         let stream = body_to_stream(body);
         if let Some(boundary) = boundary {
             let mut fields = HashMap::new();
-            let mut files = HashMap::new();
+            let mut files = Vec::new();
             let dir = tempdir().unwrap();
             let mut m = Multipart::new(stream, boundary);
             while let Some(mut field) = m.next_field().await? {
                 if let Some(fname) = field.file_name() {
                     let fname = fname.to_string();
-                    if fname.contains('/') || fname.contains('\\') {
-                        Err(Error::MalformedMultipart("Filename contains slashes, so it might be misinterpreted by path resolver".into()))?;
-                    }
-                    let path = dir.path().join(&fname);
+                    let fpathname = Uuid::new_v4().to_string();
+                    let path = dir.path().join(&fpathname);
                     let mut file = File::create_new(&path).await.unwrap();
                     while let Some(chunk) = field.chunk().await? {
                         file.write(&chunk).await.unwrap();
                     }
-                    files.insert(fname, path);
+                    files.push((fname, path));
                 } else {
                     if let Some(name) = field.name() {
                         let name = name.into();

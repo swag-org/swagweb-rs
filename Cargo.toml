@@ -18,3 +18,11 @@ http-body-util = "0.1.2"
 futures-util = "0.3.30"
 http = "1.1.0"
 tempfile = "3.10.1"
+
+[dependencies.uuid]
+version = "1.10.0"
+features = [
+    "v4",                # generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
