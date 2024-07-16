@@ -8,7 +8,7 @@ use hyper::{
     header::CONTENT_TYPE,
 };
 use multer::Multipart;
-use pyo3::{ffi::PyObject, pyclass, types::PyAnyMethods, Py, PyAny, Python};
+use pyo3::pyclass;
 use tempfile::tempdir;
 use thiserror::Error;
 use tokio::{fs::File, io::AsyncWriteExt};
@@ -28,13 +28,20 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone)]
-#[pyclass(get_all)]
+#[pyclass]
 pub struct Request {
+    #[pyo3(get)]
     pub uri: String,
+    #[pyo3(get)]
     pub method: String,
+    #[pyo3(get)]
     pub headers: HashMap<String, String>,
+    #[pyo3(get)]
     pub content: Option<Vec<u8>>,
+    pub content_valid_utf8: bool,
+    #[pyo3(get)]
     pub fields: Option<HashMap<String, String>>,
+    #[pyo3(get)]
     pub files: Option<HashMap<String, PathBuf>>,
 }
 
@@ -84,15 +91,18 @@ impl Request {
                 method,
                 headers,
                 content: None,
+                content_valid_utf8: false,
                 fields: Some(fields),
                 files: Some(files),
             })
         } else {
+            let content = read_plain(&parts, stream).await?;
             Ok(Request {
                 uri,
                 method,
                 headers,
-                content: Some(read_plain(&parts, stream).await?),
+                content_valid_utf8: std::str::from_utf8(&content).is_ok(),
+                content: Some(content),
                 fields: None,
                 files: None,
             })

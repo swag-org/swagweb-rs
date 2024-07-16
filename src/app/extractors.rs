@@ -49,7 +49,7 @@ impl Body {
         } else if ty.is(&byte_ty) {
             BodyKind::Bytes
         } else {
-            Err(PyValueError::new_err("Expected 'int' or 'bytes'"))?
+            Err(PyValueError::new_err("Expected 'str' or 'bytes'"))?
         };
         Ok(Self(kind).based())
     }
@@ -58,13 +58,17 @@ impl Body {
 impl Extractor for Body {
     fn extract(&self, py: Python, ctx: &HttpContext) -> PyObject {
         match self.0 {
-            BodyKind::String => ctx
-                .request
-                .content
-                .as_ref()
-                .map(|x| std::str::from_utf8(&x).unwrap_or("<invalid UTF-8>"))
-                .into_py(py),
-            BodyKind::Bytes => ctx.request.content.as_ref().map(|x| x.deref()).into_py(py),
+            BodyKind::String => if ctx.request.content_valid_utf8 {
+                ctx.request
+                    .content
+                    .as_ref()
+                    .map(|x| unsafe { std::str::from_utf8_unchecked(&x) })
+                    .unwrap()
+            } else {
+                "<invalid utf-8>"
+            }
+            .into_py(py),
+            BodyKind::Bytes => ctx.request.content.as_ref().map(Deref::deref).into_py(py),
         }
     }
 
