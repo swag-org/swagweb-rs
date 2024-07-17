@@ -60,7 +60,7 @@ impl MiddlewareBehaviour for PyMiddleware {
     fn set_next(&mut self, next: Option<NextMiddleware>) {
         self.next = next;
     }
-    fn execute(&self, _context: &mut HttpContext) -> PyResult<HttpResponse> {
+    fn execute(&self, context: &mut HttpContext) -> PyResult<HttpResponse> {
         let cb: Box<dyn Fn(&mut HttpContext) -> PyResult<HttpResponse> + Send + Sync> =
             match self.get_next() {
                 None => Box::new(|_context: &mut HttpContext| {
@@ -81,7 +81,7 @@ impl MiddlewareBehaviour for PyMiddleware {
         Python::with_gil(|py| {
             let callback = Callback::new(cb);
             let py_func = self.py_fn.bind(py);
-            let result = py_func.call1((callback.into_py(py),))?;
+            let result = py_func.call1((context.clone().into_py(py), callback.into_py(py),))?;
             let http_response: HttpResponse = result.extract()?;
             Ok(http_response)
         })
